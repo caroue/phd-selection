@@ -1,0 +1,8 @@
+name: seqkit
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - seqkit=2.1.0=h9ee0642_0
+prefix: /data/home/uebermuth/miniconda3/envs/seqkit

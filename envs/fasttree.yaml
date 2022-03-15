@@ -1,0 +1,12 @@
+name: fasttree
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - _libgcc_mutex=0.1=conda_forge
+  - _openmp_mutex=4.5=1_gnu
+  - fasttree=2.1.11=hec16e2b_1
+  - libgcc-ng=11.2.0=h1d223b6_12
+  - libgomp=11.2.0=h1d223b6_12
+prefix: /data/home/uebermuth/miniconda3/envs/fasttree
