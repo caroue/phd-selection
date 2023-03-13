@@ -1,9 +1,11 @@
-with open("data/OGs.txt", "r") as file:
+### insert the list name (OGs_x.txt) of the OG set to analyze
+with open("data/OGs_for_trial.txt", "r") as file:
     SAMPLES = [sample for sample in file.read().split("\n") if len(sample) >0]
 
 rule all:
     input:
-        "OGs_number_of_branches_under_pos_selection.tsv"
+        "OGs_number_of_branches_under_pos_selection.tsv",
+        "OGs_pos_selection_pvalues.tsv"
 
 
 rule extract_protein_names:
@@ -16,61 +18,105 @@ rule extract_protein_names:
         grep "{wildcards.sample}" {input} | awk -F '\\t' '{{print $2}}' > {output}
         """
 
-rule protein_to_transcript_ID:
-    input:
-        "proteins_per_OG/Proteins_{sample}.txt"
-#        expand("proteins_per_OG/Proteins_{sample}.txt", sample=SAMPLES)
-    output:
-        "transcripts_per_OG/Transcripts_{sample}.txt"
-    shell:
-        """
-        sed "s/BRADI.*\./Bd_transcript_/g" {input} | sed 's/HORVU/Hv_transcript_HORVU/g' | sed 's/SORBI.*\./Sb_transcript_/g' | sed 's/SETIT.*\./Si_transcript_/g' | sed '/Zm/ s/P/T/g'| sed 's/Zm/transcript_Zm/g' | sed 's/Traes/transcript_Traes/g' > {output}
-#        sed "s/BRADI.*\./Bd_transcript:/g" {input} | sed 's/HORVU/Hv_transcript:HORVU/g' | sed 's/SORBI.*\./Sb_transcript:/g' | sed 's/SETIT.*\./Si_transcript:/g' | sed '/Zm/ s/P/T/g'| sed 's/Zm/transcript:Zm/g' | sed 's/Traes/transcript:Traes/g' > {output}
-        """
+#rule protein_to_transcript_ID:
+#    input:
+#        "proteins_per_OG/Proteins_{sample}.txt"
+#    output:
+#        "transcripts_per_OG/Transcripts_{sample}.txt"
+#    shell:
+#        """
+#        sed "s/BRADI.*\./Bd_transcript_/g" {input} | sed 's/HORVU/Hv_transcript_HORVU/g' | sed 's/SORBI.*\./Sb_transcript_/g' | sed 's/SETIT.*\./Si_transcript_/g' | sed '/Zm/ s/P/T/g'| sed 's/Zm/transcript_Zm/g' | sed 's/Traes/transcript_Traes/g' > {output}
+#        """
 # use double quotes for the sed command
-#        "scripts/protein_to_transcript_IDs.sh < {input} > {output}"
-    
+
 rule extract_CDS:
     input:
-        cds="data/All_species_CDS_edited_2.fa",
-        transcripts="transcripts_per_OG/Transcripts_{sample}.txt"
+        cds="data/All_species_CDS_longestiso_gene_name.fa",
+        proteins="proteins_per_OG/Proteins_{sample}.txt"
     output:
         "CDS/CDS_{sample}.fasta"
     conda:
         "envs/fasomerecords.yaml"
     shell:
         """
-        faSomeRecords {input.cds} {input.transcripts} {output}
+        faSomeRecords {input.cds} {input.proteins} {output}
         """
 
-#alignment funktionierte nicht, weil die transkripte im fasta header ein ":" hatten. Habe ich in der rule protein_to_transcript_ID und im All_species_CDS_edited_2.fa auf "_" geändert
-#alignment fasta hat long lines, die nicht gebrochen sind!??
-rule alignment:
+### checkpoint: check CDSs for "N" in the sequence, remove files which contain "N" in the sequence
+### and only move to rule pre_msa the retained files
+#We pretend that the number of clusters is unknown beforehand. Hence, the checkpoint only defines an output directory
+checkpoint clean_CDS:
     input:
-        "CDS/CDS_{sample}.fasta"
+        expand("CDS/CDS_{sample}.fasta", sample=SAMPLES)
     output:
-        nt="alignment/{sample}_NT_al.fasta",
-        aa="alignment/{sample}_AA_al.fasta"
-    shell:
-        "java -jar -Xmx600m /scratch1/cropbio/uebermuth/software/macse_v2.06.jar -prog alignSequences "
-        "-seq {input} -out_NT {output.nt} -out_AA {output.aa}"
-
-rule remove_stop_codon_from_NT_AL:
-    input:
-        "alignment/{sample}_NT_al.fasta"
-    output:
-        "alignment/nostop/{sample}_NT_al_nostop.fasta"
+        directory("clean_CDS")
     conda:
-#        "envs/biopython_and_snakemake.yaml"
         "envs/Biopython.yaml"
     script:
-        "scripts/replace_stop_codons.py"
+        "scripts/clean_CDS_2.py"
+#        script which opens each CDS_{sample}.fasta, reads the CDS, outputs only if no "N" is found
+
+rule pre_msa:
+    input:
+        "clean_CDS/CDS_{simple}.fasta"
+    output:
+        AA="pre-msa/{simple}_AA.fasta",
+        NT="pre-msa/{simple}_NT.fasta",
+        fil="pre-msa/{simple}_filtered.json",
+        cop="pre-msa/{simple}_copies.json"
+    conda:
+        "envs/hyphy.yaml"
+    shell:
+#        "hyphy /scratch1/cropbio/uebermuth/software/hyphy-analyses/codon-msa/pre-msa.bf --input {input} --protein {output.AA} --rna {output.NT} --filter {output.fil} --copies {output.cop}"
+### try with --E 0.05 option to allow alignment of sequences with low homology 
+        "hyphy /scratch1/cropbio/uebermuth/software/hyphy-analyses/codon-msa/pre-msa.bf --E 0.05 --input {input} --protein {output.AA} --rna {output.NT} --filter {output.fil} --copies {output.cop}"
+
+rule msa:
+    input:
+        "pre-msa/{simple}_AA.fasta"
+    output:
+        "msa/{simple}_AA_al.fasta"
+    conda:
+        "envs/muscle.yaml"
+    shell:
+        "muscle -align {input} -output {output}"
+
+rule post_msa:
+    input:
+        protal="msa/{simple}_AA_al.fasta",
+        NT="pre-msa/{simple}_NT.fasta"
+    output:
+        "post-msa/{simple}_NT_al.fasta"
+    conda:
+        "envs/hyphy.yaml"
+    shell:
+        "hyphy /scratch1/cropbio/uebermuth/software/hyphy-analyses/codon-msa/post-msa.bf --protein-msa {input.protal} --nucleotide-sequences {input.NT} --output {output} --compress No"
+
+def aggregate_input(wildcards):
+    ck_output = checkpoints.clean_CDS.get(**wildcards).output[0]
+    file_names= expand("post-msa/{simple}_NT_al.fasta",
+                       simple = glob_wildcards(os.path.join(ck_output, "CDS_{simple}.fasta")).simple)
+    return file_names
+
+### checkpoint: check nucleotide msa files for "?" in the sequence, remove files which contain "?" in the sequence
+### and only move to rule tree the retained files
+#We pretend that the number of clusters is unknown beforehand. Hence, the checkpoint only defines an output directory
+checkpoint clean_msa:
+    input:
+        aggregate_input
+    output:
+        directory("clean_msa")
+    conda:
+        "envs/Biopython.yaml"
+    script:
+        "scripts/clean_CDS_3.py"
+#        script which opens each {sample}_NT_al.fasta, reads the nucleotide alignment, outputs only if no "N" nor "?" is found
 
 rule tree:
     input:
-        "alignment/nostop/{sample}_NT_al_nostop.fasta"
+        "clean_msa/{sumple}_NT_al.fasta"
     output:
-        "tree/{sample}_NT_al_nostop.nwk"
+        "tree/{sumple}_NT_al.nwk"
     conda:
         "envs/fasttree.yaml"
     shell:
@@ -78,20 +124,41 @@ rule tree:
 
 rule absrel:
     input:
-        al="alignment/nostop/{sample}_NT_al_nostop.fasta",
-        tree="tree/{sample}_NT_al_nostop.nwk"
+        al="post-msa/{sumple}_NT_al.fasta",
+        tree="tree/{sumple}_NT_al.nwk"
     output:
-        json="absrel/{sample}_absrel.json",
-        absrelout="absrel/{sample}_absrel.out"
+        json="absrel/{sumple}_absrel.json",
+        absrelout="absrel/{sumple}_absrel.out"
     conda:
         "envs/hyphy.yaml"
+    threads:
+        8
     shell:
         "hyphy absrel --alignment {input.al} --tree {input.tree} --output {output.json}  > {output.absrelout}"
 
-rule create_table:
+### the following rules require input with wildcards generates by checkpoints and output only textfiles (which are finally queried by rule_all. 
+### Hence, we need an input function here which defines the wildcards created by checkpoint clean_CDS
+
+def aggregate_input_2(wildcards):
+    ck_output = checkpoints.clean_msa.get(**wildcards).output[0]
+    file_names= expand("absrel/{sumple}_absrel.json",
+                       sumple = glob_wildcards(os.path.join(ck_output, "{sumple}_NT_al.fasta")).sumple)
+    return file_names
+
+
+
+rule create_table_numbers:
     input:
-        expand("absrel/{bla}_absrel.json", bla=SAMPLES)
+        aggregate_input_2
     output:
         "OGs_number_of_branches_under_pos_selection.tsv"
     script:
         "scripts/Create_OGs_number_of_pos_selection.py"
+
+rule create_table_pvalues:
+    input:
+        aggregate_input_2
+    output:
+        "OGs_pos_selection_pvalues.tsv"
+    script:
+        "scripts/Create_OGs_pos_selection_pvalue.py"
