@@ -2,8 +2,10 @@
 works on snakemake version 7.0.0
 
 # data/: 
-softlink here the "Conserved_dataset_matrix.tsv", which contains the OG in the first column and the corresponding protein names in the second column 
+softlink here the "Conserved_dataset_matrix.tsv", which contains the OG in the first column and the corresponding protein names in the second column
+
 softlink here the fasta file which contains the CDS for all proteins of all species. NOTE: the fasta headers need to contain the same protein ID as the "Conserved_dataset_matrix.tsv". Must not contain ":"
+
  softlink here a list of all OGs you want to be analyzed. e.g. "OGs_in_conserved_dataset.txt"
 
 # envs/:
@@ -15,5 +17,7 @@ pre- and post-msa.bf scripts (codon-msa) from hyphy developer "spond" in: https:
 
 # start the workflow:
 write the name of the list containing the OGs you want to be analyzed into the first line of the Snakefile
+
 start the workflow with as many cores as you want and use the --use-conda flag for the necessary envs to be installed on the run
+
 snakemake --cores 90 --use-conda
