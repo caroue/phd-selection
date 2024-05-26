@@ -1,5 +1,5 @@
 # phd-selection
-works in python 3.10.10 and on snakemake version 7.0.0
+works on snakemake version 7.0.0 with python 3.10.10 and tabulate version 0.8.10! 
 
 # data/: 
 softlink here the "Conserved_dataset_matrix.tsv", which contains the OG in the first column and the corresponding protein names in the second column
