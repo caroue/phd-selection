@@ -1,3 +1,5 @@
+https://doi.org/10.5281/zenodo.14540009
+
 # phd-selection
 works on snakemake version 7.0.0. The Snakemake_env.yaml specifies the dependencies for the workflow. 
 
