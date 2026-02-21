@@ -1,6 +1,6 @@
-### insert the list name (OGs_x.txt) of the OG set to analyze
-with open("data/OGs_for_trial.txt", "r") as file:
-    SAMPLES = [sample for sample in file.read().split("\n") if len(sample) >0]
+# insert the list name (OGs_x.txt) of the OG set to analyze
+with open("data/OGs_full_list_removed_1_HOG.txt", "r") as file:
+    SAMPLES = [sample for sample in file.read().split("\n") if len(sample) > 0]
 
 rule all:
     input:
